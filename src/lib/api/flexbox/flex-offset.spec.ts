@@ -7,7 +7,7 @@
  */
 import {Component} from '@angular/core';
 import {CommonModule} from '@angular/common';
-import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {ComponentFixture, inject, TestBed} from '@angular/core/testing';
 
 import {DEFAULT_BREAKPOINTS_PROVIDER} from '../../media-query/breakpoints/break-points-provider';
 import {BreakPointRegistry} from '../../media-query/breakpoints/break-point-registry';
@@ -15,20 +15,28 @@ import {MockMatchMedia} from '../../media-query/mock/mock-match-media';
 import {MatchMedia} from '../../media-query/match-media';
 import {FlexLayoutModule} from '../../module';
 
-import {customMatchers, expect} from '../../utils/testing/custom-matchers';
-import {_dom as _} from '../../utils/testing/dom-tools';
+import {customMatchers} from '../../utils/testing/custom-matchers';
 
 import {
-  makeExpectDOMFrom,
   makeCreateTestComponent,
-  queryFor
+  queryFor,
+  expectEl,
+  expectNativeEl,
 } from '../../utils/testing/helpers';
+import {Platform, PlatformModule} from '@angular/cdk/platform';
+import {StyleService} from '../../utils/styling/styler';
 
-describe('flex directive', () => {
+describe('flex-offset directive', () => {
   let fixture: ComponentFixture<any>;
-  let expectDOMFrom = makeExpectDOMFrom(() => TestFlexComponent);
+  let styler: StyleService;
+  let platform: Platform;
   let componentWithTemplate = (template: string) => {
     fixture = makeCreateTestComponent(() => TestFlexComponent)(template);
+
+    inject([StyleService, Platform], (_styler: StyleService, _platform: Platform) => {
+      styler = _styler;
+      platform = _platform;
+    })();
   };
 
   beforeEach(() => {
@@ -36,11 +44,12 @@ describe('flex directive', () => {
 
     // Configure testbed to prepare services
     TestBed.configureTestingModule({
-      imports: [CommonModule, FlexLayoutModule],
+      imports: [CommonModule, FlexLayoutModule, PlatformModule],
       declarations: [TestFlexComponent],
       providers: [
         BreakPointRegistry, DEFAULT_BREAKPOINTS_PROVIDER,
-        {provide: MatchMedia, useClass: MockMatchMedia}
+        {provide: MatchMedia, useClass: MockMatchMedia},
+        StyleService,
       ]
     });
   });
@@ -51,24 +60,27 @@ describe('flex directive', () => {
       componentWithTemplate(`<div fxFlexOffset='32px' fxFlex></div>`);
       fixture.detectChanges();
 
-      let dom = fixture.debugElement.children[0].nativeElement;
-      let isBox = _.hasStyle(dom, 'margin-left', '32px');
-      let hasFlex = _.hasStyle(dom, 'flex', '1 1 1e-09px') ||         // IE
-                _.hasStyle(dom, 'flex', '1 1 1e-9px') ||          // Chrome
-                _.hasStyle(dom, 'flex', '1 1 0.000000001px') ||   // Safari
-                _.hasStyle(dom, 'flex', '1 1 0px');
-
-      expect(isBox).toBeTruthy();
-      expect(hasFlex).toBe(true);
+      let dom = fixture.debugElement.children[0];
+      expectEl(dom).toHaveStyle({'margin-left': '32px'}, styler);
+      if (platform.BLINK) {
+        expectEl(dom).toHaveStyle({'flex': '1 1 1e-09px'}, styler);
+      } else if (platform.FIREFOX) {
+        expectEl(dom).toHaveStyle({'flex': '1 1 1e-9px'}, styler);
+      } else if (platform.EDGE) {
+        expectEl(dom).toHaveStyle({'flex': '1 1 0px'}, styler);
+      } else {
+        expectEl(dom).toHaveStyle({'flex': '1 1 0.000000001px'}, styler);
+      }
     });
 
 
     it('should work with percentage values', () => {
-      expectDOMFrom(`<div fxFlexOffset='17' fxFlex='37'></div>`).toHaveStyle({
+      componentWithTemplate(`<div fxFlexOffset='17' fxFlex='37'></div>`);
+      expectNativeEl(fixture).toHaveStyle({
         'flex': '1 1 100%',
         'box-sizing': 'border-box',
         'margin-left': '17%'
-      });
+      }, styler);
     });
 
     it('should work fxLayout parents', () => {
@@ -78,12 +90,12 @@ describe('flex directive', () => {
         </div>
       `);
       fixture.detectChanges();
-      let parent = queryFor(fixture, '.test')[0].nativeElement;
-      let element = queryFor(fixture, '[fxFlex]')[0].nativeElement;
+      let parent = queryFor(fixture, '.test')[0];
+      let element = queryFor(fixture, '[fxFlex]')[0];
 
       // parent flex-direction found with 'column' with child height styles
-      expect(parent).toHaveStyle({'flex-direction': 'column', 'display': 'flex'});
-      expect(element).toHaveStyle({'margin-top': '17px'});
+      expectEl(parent).toHaveStyle({'flex-direction': 'column', 'display': 'flex'}, styler);
+      expectEl(element).toHaveStyle({'margin-top': '17px'}, styler);
     });
 
     it('should CSS stylesheet and not inject flex-direction on parent', () => {
@@ -97,12 +109,12 @@ describe('flex directive', () => {
       `);
 
       fixture.detectChanges();
-      let parent = queryFor(fixture, '.test')[0].nativeElement;
-      let element = queryFor(fixture, '[fxFlex]')[0].nativeElement;
+      let parent = queryFor(fixture, '.test')[0];
+      let element = queryFor(fixture, '[fxFlex]')[0];
 
       // parent flex-direction found with 'column' with child height styles
-      expect(parent).toHaveStyle({'flex-direction': 'column', 'display': 'flex'});
-      expect(element).toHaveStyle({'margin-top': '41px'});
+      expectEl(parent).toHaveStyle({'flex-direction': 'column', 'display': 'flex'}, styler);
+      expectEl(element).toHaveStyle({'margin-top': '41px'}, styler);
     });
 
     it('should work with styled-parent flex directions', () => {
@@ -114,24 +126,24 @@ describe('flex directive', () => {
         </div>
       `);
       fixture.detectChanges();
-      let element = queryFor(fixture, '[fxFlex]')[0].nativeElement;
-      let parent = queryFor(fixture, '.parent')[0].nativeElement;
+      let element = queryFor(fixture, '[fxFlex]')[0];
+      let parent = queryFor(fixture, '.parent')[0];
 
       // parent flex-direction found with 'column'; set child with height styles
-      expect(element).toHaveStyle({'margin-top': '21%'});
-      expect(parent).toHaveStyle({'flex-direction': 'column'});
+      expectEl(element).toHaveStyle({'margin-top': '21%'}, styler);
+      expectEl(parent).toHaveStyle({'flex-direction': 'column'}, styler);
     });
 
     it('should ignore fxLayout settings on same element', () => {
-      expectDOMFrom(`
+      componentWithTemplate(`
           <div fxLayout='column' fxFlex='37%' fxFlexOffset='52px' >
           </div>
-        `)
-          .not.toHaveStyle({
+        `);
+      expectNativeEl(fixture).not.toHaveStyle({
         'flex-direction': 'row',
         'flex': '1 1 100%',
         'margin-left': '52px',
-      });
+      }, styler);
     });
 
   });

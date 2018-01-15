@@ -1,0 +1,9 @@
+{
+  "spec_dir": "dist/packages/flex-layout",
+  "spec_files": [
+    "**/*.spec.js"
+  ],
+
+  "captureConsole": true,
+  "random": true
+}
